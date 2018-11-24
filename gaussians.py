@@ -10,10 +10,6 @@ import seaborn as sns
 
 
 def get_normal_data(mean, covar, points):
-    """ 
-    Generate data from a normal Gaussian distribution with a mean vector, covariance matrix and number of data points required.
-    Returned is a numpy array of shape [points, 2] where each row is an x, y coordinate and frozen multivariate normal instance.
-    """
     mvn = sps.multivariate_normal(mean=mean, cov=covar)
     data = mvn.rvs(size=points)
     sys.stderr.flush()
@@ -46,16 +42,6 @@ def calc_R_theta(theta):
 
 
 def calc_fisher_ratio(ya, yb):
-    """
-    Calculate the Fisher ratio. TODO
-
-    Parameters:
-        ya : Result of class a projection
-        yb : Result of class b projection
-
-    Returns:
-        Calculated Fisher ratio
-    """
     count_a = np.size(ya)
     count_b = np.size(yb)
 
@@ -65,6 +51,17 @@ def calc_fisher_ratio(ya, yb):
     ratio = top / (bot_lhs + bot_rhs)
     return ratio
 
+
+def calc_unbalanced_discriminant(ya, yb):
+    count_a = np.size(ya)
+    count_b = np.size(yb)
+
+    top = (np.mean(ya) - np.mean(yb)) ** 2
+    bot = np.var(ya) + np.var(yb)
+    ratio = top / bot
+    return ratio
+
+
 def calc_log_odds(xs, ys, mean_a, mean_b, covar_a, covar_b):
     Lam_a = np.linalg.inv(covar_a)
     Lam_b = np.linalg.inv(covar_b)
@@ -73,11 +70,12 @@ def calc_log_odds(xs, ys, mean_a, mean_b, covar_a, covar_b):
     for xi, x in enumerate(xs):
         for yi, y in enumerate(ys):
             p = np.array([x, y])
-            g_a = (p - mean_a).T.dot(Lam_a).dot(p-mean_a) / 2
-            g_b = (p - mean_b).T.dot(Lam_b).dot(p-mean_b) / 2
+            g_a = (p - mean_a).T.dot(Lam_a).dot(p - mean_a) / 2
+            g_b = (p - mean_b).T.dot(Lam_b).dot(p - mean_b) / 2
             Z[yi][xi] = lhs + g_b - g_a
     q2a_ax.contour(X, Y, Z, 0, colors='green')
     return Z
+
 
 ####################################################
 # MAIN
@@ -95,7 +93,7 @@ if __name__ == "__main__":
     xa = xa.T
 
     # Dataset B
-    count_b = count_a
+    count_b = 100
     mean_b = np.array([1, 1])
     covar_b = np.array([[2, 1], [1, 2]])
     xb, mvn_b = get_normal_data(mean_b, covar_b, count_b)
@@ -124,7 +122,7 @@ if __name__ == "__main__":
     orig_w = np.array([1, 0])
     max_val = float('-inf')
     w_star = []
-    # Test for each theta
+    # Test the fisher ratio for each theta
     for i, theta in enumerate(test_mat[0]):
         w = calc_R_theta(theta).dot(orig_w)
         ya = calc_y(xa, w)
@@ -137,7 +135,7 @@ if __name__ == "__main__":
     # Process test results
     print("[W* = " + str(w_star) + "] [Ratio = " + str(max_val) + "]")
     q1b_fig, q1b_ax = plt.subplots(ncols=1, nrows=1)
-    q1b_ax.plot(test_mat[0], test_mat[1], color='black')
+    q1b_ax.plot(test_mat[0], test_mat[1], color='black', label='Fisher Ratio')
     plt.xlabel('Theta (radians)')
     plt.ylabel('Ratio')
 
@@ -165,42 +163,58 @@ if __name__ == "__main__":
     # Extrapolate line to fit across the whole dataset
     y_axis = polynomial(x_range)
     # Plot the line
-    q2a_ax.plot(x_range, y_axis, color='black', linewidth=2, linestyle='dashed')
+    q2a_ax.plot(x_range, y_axis, color='black',
+                linewidth=2, linestyle='dashed')
 
     # Find the PDF for each distribution, plot as equi-probable contour lines
     X, Y = np.meshgrid(x_range, y_range)
     X_Y_mesh = np.dstack((X, Y))
     Z_a = mvn_a.pdf(X_Y_mesh)
-    cs = q2a_ax.contour(X, Y, Z_a, 15, colors='blue', linestyles='dashed', linewidths=1)
+    cs = q2a_ax.contour(X, Y, Z_a, 15, colors='blue',
+                        linestyles='dashed', linewidths=1)
     #labs = q2a_ax.clabel(cs, inline=True, fontsize=10)
     Z_b = mvn_b.pdf(X_Y_mesh)
-    cs = q2a_ax.contour(X, Y, Z_b, 15, colors='red', linestyles='dashed', linewidths=1)
+    cs = q2a_ax.contour(X, Y, Z_b, 15, colors='red',
+                        linestyles='dashed', linewidths=1)
     #labs = q2a_ax.clabel(cs, inline=True, fontsize=10)
 
     # --- (B)
     # Calculate the log odds over the plot area
     Z = calc_log_odds(X[0, :], Y[:, 0], mean_a, mean_b, covar_a, covar_b)
     q2a_ax.contour(X, Y, Z, 0, colors='green')
-
-    # Extract those log odds close to 0
-    Xs, Ys = [], []
-    tol = 1e-17
-    for xi, x in enumerate(X[0, :]):
-        for yi, y in enumerate(Y[:, 0]):
-            log_odd = np.log(np.abs(Z[yi][xi]))
-            if log_odd < tol:
-                Xs.append(x)
-                Ys.append(y)
-    print(len(Xs))
+    # Constrain the axis to where we expect data
     q2a_ax.set_xlim([np.min(comb_x[0]), np.max(comb_x[0])])
     q2a_ax.set_ylim([np.min(comb_x[1]), np.max(comb_x[1])])
 
+    # Make a 3D plot of the log ratios for reference
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     s0 = ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.plasma)
 
     # --- (C)
-    # GOD KNOWS WHAT THIS MEANS
+    # Create another copy of the graph from q1b so we can compare the discriminant
+    q2c_fig, q2c_ax = plt.subplots(ncols=1, nrows=1)
+    q2c_ax.plot(test_mat[0], test_mat[1], color='black', label='Fisher Ratio')
+    plt.xlabel('Theta (radians)')
+    plt.ylabel('Ratio')
+
+    steps = 720
+    thetas = np.linspace(0, np.pi * 2, num=steps)
+    test_mat = np.vstack((thetas, np.empty(steps)))
+    orig_w = np.array([1, 0])
+    max_val = float('-inf')
+    w_star = []
+    # Test the discriminant for each theta
+    for i, theta in enumerate(test_mat[0]):
+        w = calc_R_theta(theta).dot(orig_w)
+        ya = calc_y(xa, w)
+        yb = calc_y(xb, w)
+        test_mat[1][i] = calc_unbalanced_discriminant(ya, yb)
+        if (test_mat[1][i] > max_val):
+            w_star = w
+            max_val = test_mat[1][i]
+    q2c_ax.plot(test_mat[0], test_mat[1], color='red', label='Unbalanced')
+    q2c_ax.legend()
 
     # Make sure we see any issues before showing figures
     sys.stdout.flush()
