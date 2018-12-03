@@ -216,7 +216,7 @@ if __name__ == "__main__":
 
     # ! Section 4.2
     # Question 1
-    ps = range(0, 6)
+    ps = range(1, 6)
     l2 = 0
     groups = 10
     samples = 15
@@ -269,15 +269,13 @@ if __name__ == "__main__":
     bias_ax.plot(ps, bias_sqs + vars, color='g', label='Bias^2 + Variance')
     bias_ax.set_xlabel('Complexity (p)')
     bias_ax.legend()
-    bias_ax.set_xlim(0, 5);
 
     error_fig, error_ax = plt.subplots(ncols=1, nrows=1)
-    error_ax.plot(ps, test_errs, color='blue', label='Train RSS')
-    error_ax.plot(ps, train_errs, color='red', label='Test RSS')
+    error_ax.plot(ps, train_errs, color='blue', label='Train RSS')
+    error_ax.plot(ps, test_errs, color='red', label='Test RSS')
     error_ax.set_xlabel('Complexity (p)')
     error_ax.set_ylabel('RSS')
     error_ax.legend()
-    error_ax.set_xlim(0, 5);
 
     # Make sure we see any issues before showing figures
     sys.stdout.flush()
